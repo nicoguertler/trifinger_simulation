@@ -103,7 +103,7 @@ initialising PyBullet and loading the robot into the environment.</p>
 
 <span class="n">sim</span> <span class="o">=</span> <span class="n">SimFinger</span><span class="p">(</span>
     <span class="n">finger_type</span><span class="o">=</span><span class="s2">&quot;fingerpro&quot;</span><span class="p">,</span>
-    <span class="n">enable_visualization</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+    <span class="n">enable_visualization</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -121,7 +121,7 @@ is a very basic example that uses position commands to hold the robot at the
 initial position and prints the actual observed position:</p>
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">time</span>
 
-<span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+<span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
     <span class="c1"># to have it run in real-time</span>
     <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">sim</span><span class="o">.</span><span class="n">time_step_s</span><span class="p">)</span>
 
@@ -134,7 +134,7 @@ initial position and prints the actual observed position:</p>
     <span class="c1"># get the observation of the current time step</span>
     <span class="n">observation</span> <span class="o">=</span> <span class="n">sim</span><span class="o">.</span><span class="n">get_observation</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
 
-    <span class="k">print</span><span class="p">(</span><span class="n">observation</span><span class="o">.</span><span class="n">position</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">observation</span><span class="o">.</span><span class="n">position</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>When using position commands, a PD controller is executed internally to compute

@@ -102,6 +102,18 @@
 <span class="kn">from</span> <span class="nn">trifinger_simulation</span> <span class="kn">import</span> <span class="n">finger_types_data</span>
 
 
+<span class="c1"># In NumPy versions &gt;=1.17, np.clip got significantly slower.  The best</span>
+<span class="c1"># workaround currently seems to be to use the internal np.core.umath.clip</span>
+<span class="c1"># instead (see https://github.com/numpy/numpy/issues/14281).</span>
+<span class="c1"># np.core.umath.clip does not exist in versions &lt;1.17 so in this case we fall</span>
+<span class="c1"># back to np.clip (which is okay because in these versions np.clip was still</span>
+<span class="c1"># good).</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">clip</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">umath</span><span class="o">.</span><span class="n">clip</span>
+<span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+    <span class="n">clip</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span>
+
+
 <span class="k">def</span> <span class="nf">int_to_rgba</span><span class="p">(</span>
     <span class="n">color</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mh">0xFF</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">typing</span><span class="o">.</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
@@ -450,7 +462,7 @@
         <span class="n">push_sensor_no_contact_value</span> <span class="o">=</span> <span class="mf">0.05</span>
         <span class="n">observation</span><span class="o">.</span><span class="n">tip_force</span> <span class="o">/=</span> <span class="n">push_sensor_saturation_force_N</span>
         <span class="n">observation</span><span class="o">.</span><span class="n">tip_force</span> <span class="o">+=</span> <span class="n">push_sensor_no_contact_value</span>
-        <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">observation</span><span class="o">.</span><span class="n">tip_force</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">observation</span><span class="o">.</span><span class="n">tip_force</span><span class="p">)</span>
+        <span class="n">clip</span><span class="p">(</span><span class="n">observation</span><span class="o">.</span><span class="n">tip_force</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">observation</span><span class="o">.</span><span class="n">tip_force</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">observation</span>
 
@@ -537,6 +549,48 @@
             <span class="n">physicsClientId</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_pybullet_client_id</span><span class="p">,</span>
         <span class="p">)</span>
 
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_sanitise_torques</span><span class="p">(</span>
+        <span class="n">desired_torques</span><span class="p">:</span> <span class="n">typing</span><span class="o">.</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span>
+        <span class="n">max_torque</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">safety_kd</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">joint_velocities</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform a check on the torques being sent to be applied to</span>
+<span class="sd">        the motors so that they do not exceed the safety torque limit</span>
+
+<span class="sd">        Note: This static method exists for easier unit testing.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            desired_torques: The torques desired to be applied to the motors.</span>
+<span class="sd">            max_torque: The maximum absolute joint torque that is allowed.</span>
+<span class="sd">            safety_kd: Kd gain for the velocity damping.  Set to zero to</span>
+<span class="sd">                disable the damping.</span>
+<span class="sd">            joint_velocities: Current joint velocities (used for the velocity</span>
+<span class="sd">                damping).</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The torques that can safely be applied to the joints.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># clip desired torque to allowed range</span>
+        <span class="n">applied_torques</span> <span class="o">=</span> <span class="n">clip</span><span class="p">(</span>
+            <span class="n">desired_torques</span><span class="p">,</span>
+            <span class="o">-</span><span class="n">max_torque</span><span class="p">,</span>
+            <span class="o">+</span><span class="n">max_torque</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># apply velocity damping and clip again to make sure we stay in the</span>
+        <span class="c1"># valid range</span>
+        <span class="n">applied_torques</span> <span class="o">-=</span> <span class="n">safety_kd</span> <span class="o">*</span> <span class="n">joint_velocities</span>
+        <span class="n">applied_torques</span> <span class="o">=</span> <span class="n">clip</span><span class="p">(</span>
+            <span class="n">applied_torques</span><span class="p">,</span>
+            <span class="o">-</span><span class="n">max_torque</span><span class="p">,</span>
+            <span class="o">+</span><span class="n">max_torque</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">applied_torques</span>
+
     <span class="k">def</span> <span class="nf">__safety_check_torques</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">desired_torques</span><span class="p">:</span> <span class="n">typing</span><span class="o">.</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
@@ -551,12 +605,6 @@
 <span class="sd">            The torques that can be actually applied to the motors (and will be</span>
 <span class="sd">            applied)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">applied_torques</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span>
-            <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">desired_torques</span><span class="p">),</span>
-            <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">max_motor_torque</span><span class="p">,</span>
-            <span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">max_motor_torque</span><span class="p">,</span>
-        <span class="p">)</span>
-
         <span class="n">current_joint_states</span> <span class="o">=</span> <span class="n">pybullet</span><span class="o">.</span><span class="n">getJointStates</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">finger_id</span><span class="p">,</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">pybullet_joint_indices</span><span class="p">,</span>
@@ -565,15 +613,13 @@
         <span class="n">current_velocity</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
             <span class="p">[</span><span class="n">joint</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">joint</span> <span class="ow">in</span> <span class="n">current_joint_states</span><span class="p">]</span>
         <span class="p">)</span>
-        <span class="n">applied_torques</span> <span class="o">-=</span> <span class="bp">self</span><span class="o">.</span><span class="n">safety_kd</span> <span class="o">*</span> <span class="n">current_velocity</span>
 
-        <span class="n">applied_torques</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span>
-            <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">applied_torques</span><span class="p">),</span>
-            <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">max_motor_torque</span><span class="p">,</span>
-            <span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">max_motor_torque</span><span class="p">,</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sanitise_torques</span><span class="p">(</span>
+            <span class="n">desired_torques</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">max_motor_torque</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">safety_kd</span><span class="p">,</span>
+            <span class="n">current_velocity</span><span class="p">,</span>
         <span class="p">)</span>
-
-        <span class="k">return</span> <span class="n">applied_torques</span>
 
     <span class="k">def</span> <span class="nf">__compute_pd_control_torques</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
